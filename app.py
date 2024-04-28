@@ -1,17 +1,15 @@
 # Import necessary libraries
 from flask import Flask, render_template, request
-import pickle
 from urllib.parse import urlparse
 from tld import get_tld
 import re
-
+import joblib
 # Initialize Flask app
 app = Flask(__name__)
-
+ 
 # Load the pre-trained model
-with open('random_forest_model.pkl', 'rb') as model_file:
-    model = pickle.load(model_file)
-
+model = joblib.load('random_forest_model.pkl')
+ 
 # Function to preprocess URL and extract features
 def preprocess_url(url):
     parsed_url = urlparse(url)
@@ -26,18 +24,18 @@ def preprocess_url(url):
     tld = get_tld(url, fail_silently=True)
     tld_length = len(tld) if tld else -1
     features = [url_length, hostname_length, path_length, fd_length, tld_length]
-    
+   
     # Additional features extracted from the URL
     features += [url.count('@'), url.count('?'), url.count('-'), url.count('='), url.count('.'),
                  url.count('#'), url.count('%'), url.count('+'), url.count('$'), url.count('!'),
                  url.count('*'), url.count(','), url.count('//'), url.count('http'), url.count('https'),
                  sum(c.isdigit() for c in url), sum(c.isalpha() for c in url), url.count('/')]
-    
+   
     # Features related to IP address and URL shortening service
     features += [having_ip_address(url), shortening_service(url)]
-    
+   
     return features
-
+ 
 # Function to check if IP address is present in URL
 def having_ip_address(url):
     match = re.search(
@@ -50,7 +48,7 @@ def having_ip_address(url):
         return -1
     else:
         return 1
-
+ 
 # Function to check if URL is from a URL shortening service
 def shortening_service(url):
     match = re.search('bit\.ly|goo\.gl|shorte\.st|go2l\.ink|x\.co|ow\.ly|t\.co|tinyurl|tr\.im|is\.gd|cli\.gs|'
@@ -66,12 +64,12 @@ def shortening_service(url):
         return -1
     else:
         return 1
-
+ 
 # Define home route
 @app.route('/')
 def home():
     return render_template('index.html')
-
+ 
 # Define predict route
 @app.route('/predict', methods=['POST'])
 def predict():
@@ -81,9 +79,16 @@ def predict():
     # Make prediction using the loaded model
     prediction = model.predict([features])[0]
     # Determine prediction label
-    prediction_label = "Malicious" if prediction == 1 else "Benign"
+    if prediction == 0:
+        prediction_label = 'Benign'
+    elif prediction == 1:
+        prediction_label = 'Defacement'
+    elif prediction == 2:
+        prediction_label = 'Phishing'
+    else:
+        prediction_label = 'Malicious'
     return render_template('result.html', prediction=prediction_label)
-
+ 
 # Run the Flask app
 if __name__ == '__main__':
     app.run(debug=True)
